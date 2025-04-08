@@ -1,3 +1,5 @@
+import os
+
 class SparseMatrix:
     def __init__(self, filename=None, rows=0, cols=0):
         self.rows = rows
@@ -200,7 +202,12 @@ class SparseMatrix:
         print(f"Result saved to {filename}")
 
 if __name__ == "__main__":
-    base_path = "dsa/sparse_matrix/sample_inputs/"
+    base_path = "sample_inputs/"
+    
+    # Ensure the output directory exists
+    output_dir = "output_results/"
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
     print("Enter files for addition and subtraction operations:")
     file1_name = input("Enter the first matrix file name: ")
@@ -225,7 +232,7 @@ if __name__ == "__main__":
             
             print("Performing addition...")
             result = matrix1.add(matrix2)
-            output_file = "addition_result.txt"
+            output_file = output_dir + "addition_result.txt"
             
         elif choice == '2':
             print(f"Loading {file1}...")
@@ -235,7 +242,7 @@ if __name__ == "__main__":
             
             print("Performing subtraction...")
             result = matrix1.subtract(matrix2)
-            output_file = "subtraction_result.txt"
+            output_file = output_dir + "subtraction_result.txt"
             
         elif choice == '3':
             print("For multiplication, you need to select matrices with compatible dimensions.")
@@ -259,20 +266,14 @@ if __name__ == "__main__":
                 matrix_a = SparseMatrix(file2)
                 print(f"Loading {file3}...")
                 matrix_b = SparseMatrix(file3)
-            else:
-                raise ValueError("Invalid multiplication option choice.")
-            
-            print(f"Matrix A dimensions: {matrix_a.rows}x{matrix_a.cols}")
-            print(f"Matrix B dimensions: {matrix_b.rows}x{matrix_b.cols}")
             
             print("Performing multiplication...")
             result = matrix_a.multiply(matrix_b)
-            output_file = "multiplication_result.txt"
-        
+            output_file = output_dir + "multiplication_result.txt"
+            
         print("\nResult (first 20x20 elements):")
         result.display()
         result.save_to_file(output_file)
-        print(f"Full result saved to {output_file}")
         
     except ValueError as e:
         print(f"Error: {e}")
