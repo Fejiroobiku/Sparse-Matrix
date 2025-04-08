@@ -1,71 +1,118 @@
 import os
 
-# Create results directory if it doesn't exist
-RESULTS_DIR = "results"
-os.makedirs(RESULTS_DIR, exist_ok=True)
-
-# Sample sparse matrix operations
 class SparseMatrix:
-    def __init__(self, rows, cols, elements):
+    def __init__(self, rows, cols):
         self.rows = rows
         self.cols = cols
-        self.elements = elements  # {(row, col): value}
+        self.data = {}  # Dictionary to store non-zero values keyed by (row, col)
 
     @staticmethod
     def from_file(filepath):
-        with open(filepath, 'r') as f:
-            lines = f.readlines()
-        rows = int(lines[0].split('=')[1])
-        cols = int(lines[1].split('=')[1])
-        elements = {}
-        for line in lines[2:]:
-            i, j, val = eval(line.strip())
-            elements[(i, j)] = val
-        return SparseMatrix(rows, cols, elements)
+        try:
+            with open(filepath, 'r') as f:
+                lines = [line.strip() for line in f if line.strip()]
 
-    def to_file(self, filepath):
-        with open(filepath, 'w') as f:
-            f.write(f"rows={self.rows}\n")
-            f.write(f"cols={self.cols}\n")
-            for (i, j), val in self.elements.items():
-                f.write(f"({i}, {j}, {val})\n")
+            if not (lines[0].startswith("rows=") and lines[1].startswith("cols=")):
+                raise ValueError("Missing 'rows=' or 'cols=' headers")
+
+            rows = int(lines[0].split('=')[1])
+            cols = int(lines[1].split('=')[1])
+
+            matrix = SparseMatrix(rows, cols)
+            for line in lines[2:]:
+                if not (line.startswith("(") and line.endswith(")")):
+                    raise ValueError("Input file has wrong format")
+                content = line[1:-1].split(',')
+                if len(content) != 3:
+                    raise ValueError("Each entry must have 3 values")
+                r, c, v = content
+                if '.' in r or '.' in c or '.' in v:
+                    raise ValueError("Floating point values are not allowed")
+                matrix.set(int(r), int(c), int(v))
+
+            return matrix
+        except Exception as e:
+            raise ValueError(f"Error reading file {filepath}: {e}")
+
+    def set(self, row, col, value):
+        if row < 0 or row >= self.rows or col < 0 or col >= self.cols:
+            raise IndexError("Index out of bounds")
+        if value != 0:
+            self.data[(row, col)] = value
+
+    def get(self, row, col):
+        return self.data.get((row, col), 0)
 
     def add(self, other):
-        result = self.elements.copy()
-        for key, val in other.elements.items():
-            result[key] = result.get(key, 0) + val
-        return SparseMatrix(self.rows, self.cols, {k: v for k, v in result.items() if v != 0})
+        if self.rows != other.rows or self.cols != other.cols:
+            raise ValueError("Matrix dimensions must match for addition")
+        result = SparseMatrix(self.rows, self.cols)
+        for key in set(self.data.keys()).union(other.data.keys()):
+            result.set(*key, self.get(*key) + other.get(*key))
+        return result
 
     def subtract(self, other):
-        result = self.elements.copy()
-        for key, val in other.elements.items():
-            result[key] = result.get(key, 0) - val
-        return SparseMatrix(self.rows, self.cols, {k: v for k, v in result.items() if v != 0})
+        if self.rows != other.rows or self.cols != other.cols:
+            raise ValueError("Matrix dimensions must match for subtraction")
+        result = SparseMatrix(self.rows, self.cols)
+        for key in set(self.data.keys()).union(other.data.keys()):
+            result.set(*key, self.get(*key) - other.get(*key))
+        return result
 
     def multiply(self, other):
         if self.cols != other.rows:
-            raise ValueError("Matrix dimensions do not match for multiplication")
-        result = {}
-        for (i, k), v in self.elements.items():
+            raise ValueError("Invalid dimensions for multiplication")
+        result = SparseMatrix(self.rows, other.cols)
+        for (i, k), v in self.data.items():
             for j in range(other.cols):
-                if (k, j) in other.elements:
-                    result[(i, j)] = result.get((i, j), 0) + v * other.elements[(k, j)]
-        return SparseMatrix(self.rows, other.cols, {k: v for k, v in result.items() if v != 0})
+                result.set(i, j, result.get(i, j) + v * other.get(k, j))
+        return result
+
+    def to_string(self):
+        lines = [f"rows={self.rows}", f"cols={self.cols}"]
+        for (r, c), v in sorted(self.data.items()):
+            lines.append(f"({r}, {c}, {v})")
+        return "\n".join(lines)
 
 
 def main():
-    input1 = os.path.join("sample_inputs", "matrix1.txt")
-    input2 = os.path.join("sample_inputs", "matrix2.txt")
+    input_dir = 'sample_inputs'
+    result_dir = 'results'
+    os.makedirs(result_dir, exist_ok=True)
 
-    m1 = SparseMatrix.from_file(input1)
-    m2 = SparseMatrix.from_file(input2)
+    input1 = os.path.join(input_dir, 'matrix1.txt')
+    input2 = os.path.join(input_dir, 'matrix2.txt')
 
-    m1.add(m2).to_file(os.path.join(RESULTS_DIR, "addition.txt"))
-    m1.subtract(m2).to_file(os.path.join(RESULTS_DIR, "subtraction.txt"))
-    m1.multiply(m2).to_file(os.path.join(RESULTS_DIR, "multiplication.txt"))
+    print("Select an operation:")
+    print("1. Addition")
+    print("2. Subtraction")
+    print("3. Multiplication")
+    choice = input("Enter choice (1/2/3): ").strip()
 
-    print("Operations complete. Check the 'results/' folder for outputs.")
+    try:
+        m1 = SparseMatrix.from_file(input1)
+        m2 = SparseMatrix.from_file(input2)
+
+        if choice == '1':
+            result = m1.add(m2)
+            with open(os.path.join(result_dir, 'addition.txt'), 'w') as f:
+                f.write(result.to_string())
+            print("Addition complete. Check 'results/addition.txt'")
+        elif choice == '2':
+            result = m1.subtract(m2)
+            with open(os.path.join(result_dir, 'subtraction.txt'), 'w') as f:
+                f.write(result.to_string())
+            print("Subtraction complete. Check 'results/subtraction.txt'")
+        elif choice == '3':
+            result = m1.multiply(m2)
+            with open(os.path.join(result_dir, 'multiplication.txt'), 'w') as f:
+                f.write(result.to_string())
+            print("Multiplication complete. Check 'results/multiplication.txt'")
+        else:
+            print("Invalid choice.")
+    except Exception as e:
+        print(f"Error: {e}")
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
