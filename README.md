@@ -1,32 +1,66 @@
-	Sparse Matrix Operations
-This Python script provides functionality for performing operations on sparse matrices, including addition, subtraction, and multiplication. Sparse matrices are matrices with a large number of zero elements, and this script is designed to efficiently handle such matrices.
+# Sparse Matrix Operations in Python
 
-Features
-Addition of sparse matrices
-Subtraction of sparse matrices
-Multiplication of sparse matrices
-Parsing input files to create sparse matrices
-Writing results to output files
-Usage
-Input Files: Prepare input files containing sparse matrices in the following format:
+This project implements a **Sparse Matrix** data structure in Python and performs operations such as **Addition**, **Subtraction**, and **Multiplication** on large sparse matrices stored in files.
 
-Each line represents a non-zero element of the matrix in the format (row, column, value).
-The first 2 lines should specify the dimensions of the matrix in the format rows=x and cols=y.
-Run the Script: Execute the script sparse_matrix_operations.py.
+## 📁 Project Structure
 
-You will be prompted to enter the path of the first input file containing the first sparse matrix.
-After processing the first file, you'll be prompted to enter the path of the second input file if you want to perform an operation with two matrices. If the same file path is entered, the script will perform the operation on the first matrix with itself.
-You'll then be asked to specify the path for the output file where the result will be written.
-Finally, you'll be prompted to choose the operation:
-Enter 1 for addition
-Enter 2 for subtraction
-Enter 3 for multiplication
-Output File: The result of the chosen operation will be written to the specified output file.
+Sparse-Matrix/ ├── sparse_matrix.py # Main script ├── sample_inputs/ # Folder for matrix input files │ ├── matrix1.txt │ └── matrix2.txt ├── results/ # Folder where results will be saved │ ├── addition.txt │ ├── subtraction.txt │ └── multiplication.txt └── README.md # This file
 
-The output file will contain the dimensions of the resulting matrix and its non-zero elements in the format specified for input files.
-Dependencies
-This script requires Python 3.x to run.
+mathematica
+Copy
+Edit
 
-Notes
-Ensure that the input files are correctly formatted with the dimensions specified at the beginning and each subsequent line representing a non-zero element in the matrix.
-Invalid input files may lead to errors being raised.
+## 📝 Input File Format
+
+Each matrix file should follow this format:
+
+rows=3 cols=3 (0, 1, 5) (1, 2, -2) (2, 0, 7)
+
+markdown
+Copy
+Edit
+
+- First line: number of rows
+- Second line: number of columns
+- Remaining lines: non-zero values in `(row, column, value)` format
+
+## ▶️ How to Run
+
+1. Ensure you have Python installed (Python 3.6+).
+2. Add your matrix files to the `sample_inputs/` folder as `matrix1.txt` and `matrix2.txt`.
+3. Run the script:
+
+```bash
+python sparse_matrix.py
+When prompted, enter the operation you want to perform:
+
+1 for addition
+
+2 for subtraction
+
+3 for multiplication
+
+Check the results/ folder for output files.
+
+⚠️ Error Handling
+If the input format is incorrect (e.g., wrong parentheses or non-integer values), the program will raise a clear error.
+
+Matrices must follow valid mathematical rules (e.g., multiplication requires matrix1.columns == matrix2.rows).
+
+💡 Features
+Memory-efficient sparse matrix storage using dictionaries
+
+Custom parsing of matrix files
+
+User-interactive command line interface
+
+Results are saved to disk for easy review
+
+📌 Assignment Details
+This was developed as part of the Data Structures and Algorithms for Engineers course. The assignment involved:
+
+Loading matrices from files
+
+Implementing custom sparse matrix storage
+
+Supporting large matrices without using built-in libraries like numpy or regex
