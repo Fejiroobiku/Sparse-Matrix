@@ -1,279 +1,236 @@
 import os
+from typing import Dict, Tuple, Optional, Union, Set
 
 class SparseMatrix:
-    def __init__(self, filename=None, rows=0, cols=0):
-        self.rows = rows
-        self.cols = cols
-        self.data = {}
-        if filename:
-            self.load_from_file(filename)
-            
-    def load_from_file(self, filename):
-        try:
-            file = open(filename, 'r')
-            lines = file.readlines()
-            file.close()
-            
-            if not lines:
-                raise ValueError(f"Error: The file {filename} is empty.")
+    """A class to represent and operate on sparse matrices efficiently."""
+    
+    _cache: Dict[str, 'SparseMatrix'] = {}  # Class-level cache to store loaded matrices
 
-            line_index = 0
-            while line_index < len(lines):
-                line = lines[line_index].strip()
-                if not line:
-                    line_index += 1
-                    continue
-                    
-                if self._starts_with(line, "rows="):
-                    self.rows = self._parse_int(line.split("=")[1])
-                    line_index += 1
-                elif self._starts_with(line, "cols="):
-                    self.cols = self._parse_int(line.split("=")[1])
-                    line_index += 1
-                else:
-                    break
+    def __init__(self, file_path: Optional[str] = None, 
+                 rows: Optional[int] = None, 
+                 cols: Optional[int] = None):
+        """Initialize a sparse matrix from file or with given dimensions.
+        
+        Args:
+            file_path: Path to matrix file (optional)
+            rows: Number of rows (required if file_path not provided)
+            cols: Number of columns (required if file_path not provided)
             
-            while line_index < len(lines):
-                line = lines[line_index].strip()
-                line_index += 1
-                
-                if not line:
-                    continue
-                    
-                if self._starts_with(line, "(") and self._ends_with(line, ")"):
-                    content = line[1:-1].strip()
-                    parts = self._split_by_comma(content)
-                    
-                    if len(parts) != 3:
-                        raise ValueError(f"Invalid format in file {filename}: {line}")
-                    
-                    try:
-                        row = self._parse_int(parts[0])
-                        col = self._parse_int(parts[1])
-                        value = self._parse_int(parts[2])
-                        self.data[(row, col)] = value
-                    except ValueError:
-                        raise ValueError(f"Invalid number format in file {filename}: {line}")
-                else:
-                    raise ValueError(f"Invalid format in file {filename}: {line}")
-                    
-        except:
-            raise ValueError(f"File {filename} not found or cannot be read.")
-    
-    def _starts_with(self, string, prefix):
-        if len(string) < len(prefix):
-            return False
-        return string[:len(prefix)] == prefix
-    
-    def _ends_with(self, string, suffix):
-        if len(string) < len(suffix):
-            return False
-        return string[-len(suffix):] == suffix
-    
-    def _split_by_comma(self, string):
-        result = []
-        current = ""
-        for char in string:
-            if char == ',':
-                result.append(current.strip())
-                current = ""
-            else:
-                current += char
-        result.append(current.strip())
-        return result
-    
-    def _parse_int(self, string):
-        string = string.strip()
-        if not string:
-            raise ValueError("Empty string cannot be converted to integer")
-        
-        negative = False
-        if string[0] == '-':
-            negative = True
-            string = string[1:]
-        
-        result = 0
-        for char in string:
-            if char < '0' or char > '9':
-                raise ValueError(f"Invalid character in integer: {char}")
-            result = result * 10 + (ord(char) - ord('0'))
-        
-        return -result if negative else result
-            
-    def get_element(self, row, col):
-        return self.data.get((row, col), 0)
-        
-    def set_element(self, row, col, value):
-        if value == 0:
-            if (row, col) in self.data:
-                del self.data[(row, col)]
+        Raises:
+            ValueError: If neither file_path nor dimensions are provided
+        """
+        if file_path:
+            self._load_or_cache(file_path)
+        elif rows is not None and cols is not None:
+            self.numRows, self.numCols = rows, cols
+            self.data: Dict[Tuple[int, int], int] = {}
         else:
+            raise ValueError("Provide either a file path or matrix dimensions.")
+
+    def _load_or_cache(self, file_path: str) -> None:
+        """Load matrix from file or use cached version if available.
+        
+        Args:
+            file_path: Path to matrix file
+            
+        Raises:
+            ValueError: If file cannot be loaded
+        """
+        if not os.path.exists(file_path):
+            raise ValueError(f"File not found: {file_path}")
+            
+        if file_path in self._cache:
+            cached = self._cache[file_path]
+            self.numRows, self.numCols, self.data = cached.numRows, cached.numCols, cached.data.copy()
+        else:
+            self._load_from_file(file_path)
+            self._cache[file_path] = self
+
+    def _load_from_file(self, file_path: str) -> None:
+        """Load matrix data from file.
+        
+        Args:
+            file_path: Path to matrix file
+            
+        Raises:
+            ValueError: If file format is invalid
+        """
+        try:
+            with open(file_path, 'r') as file:
+                lines = file.read().strip().split("\n")
+                if len(lines) < 2:
+                    raise ValueError("Invalid file format: missing dimension lines")
+
+            # Validate and extract matrix dimensions
+            try:
+                self.numRows = int(lines[0].split('=')[1].strip())
+                self.numCols = int(lines[1].split('=')[1].strip())
+            except (IndexError, ValueError) as e:
+                raise ValueError("Invalid dimension format in file") from e
+
+            if self.numRows <= 0 or self.numCols <= 0:
+                raise ValueError("Matrix dimensions must be positive integers")
+            
+            self.data = {}
+            
+            # Validate and extract matrix entries
+            for line in lines[2:]:
+                if line.strip():
+                    try:
+                        parts = line.strip("()").split(',')
+                        if len(parts) != 3:
+                            raise ValueError("Invalid entry format")
+                        row, col, value = map(int, parts)
+                        if row < 0 or col < 0:
+                            raise ValueError("Row and column indices must be non-negative")
+                        self.data[(row, col)] = value
+                    except ValueError as e:
+                        raise ValueError(f"Invalid matrix entry: {line}") from e
+
+        except Exception as e:
+            raise ValueError(f"Error reading matrix file {file_path}: {str(e)}")
+
+    def get(self, row: int, col: int) -> int:
+        """Get the value at a specific matrix position.
+        
+        Args:
+            row: Row index (0-based)
+            col: Column index (0-based)
+            
+        Returns:
+            The value at (row, col) or 0 if the position is empty
+            
+        Raises:
+            ValueError: If row or col are out of bounds
+        """
+        if row < 0 or row > self.numRows or col < 0 or col > self.numCols:
+            print(self.numRows, self.numCols)
+            raise ValueError(f"Position ({row}, {col}) is out of bounds")
+        return self.data.get((row, col), 0)
+
+    def set(self, row: int, col: int, value: int) -> None:
+        """Set the value at a specific matrix position.
+        
+        Args:
+            row: Row index (0-based)
+            col: Column index (0-based)
+            value: Value to set (0 will remove the entry)
+            
+        Raises:
+            ValueError: If row or col are out of bounds
+        """
+        if row < 0 or row > self.numRows or col < 0 or col > self.numCols:
+            raise ValueError(f"Position ({row}, {col}) is out of bounds")
+        if value:
             self.data[(row, col)] = value
-            if row >= self.rows:
-                self.rows = row + 1
-            if col >= self.cols:
-                self.cols = col + 1
-    
-    def transpose(self):
+        else:
+            self.data.pop((row, col), None)
+
+    def operate(self, other: 'SparseMatrix', operation: callable) -> 'SparseMatrix':
+        """Perform element-wise operation between two matrices.
+        
+        Args:
+            other: Another SparseMatrix to operate with
+            operation: Function to apply to corresponding elements
+            
+        Returns:
+            New SparseMatrix containing the result
+            
+        Raises:
+            ValueError: If matrices have different dimensions
+            TypeError: If other is not a SparseMatrix
         """
-        Returns a new matrix that is the transpose of this matrix.
-        In the transpose, rows become columns and columns become rows.
+        if not isinstance(other, SparseMatrix):
+            raise TypeError("Operation requires another SparseMatrix")
+            
+        if self.numRows != other.numRows or self.numCols != other.numCols:
+            raise ValueError(f"Matrices must have the same dimensions for operation")
+            
+        result = SparseMatrix(rows=self.numRows, cols=self.numCols)
+        for key in set(self.data.keys()).union(other.data.keys()):
+            new_val = operation(self.get(*key), other.get(*key))
+            result.set(*key, new_val)
+        return result
+
+    def add(self, other: 'SparseMatrix') -> 'SparseMatrix':
+        """Add another matrix to this one.
+        
+        Args:
+            other: Another SparseMatrix to add
+            
+        Returns:
+            New SparseMatrix containing the sum
+            
+        Raises:
+            ValueError: If matrices have different dimensions
+            TypeError: If other is not a SparseMatrix
         """
-        result = SparseMatrix(rows=self.cols, cols=self.rows)
+        return self.operate(other, lambda x, y: x + y)
+
+    def subtract(self, other: 'SparseMatrix') -> 'SparseMatrix':
+        """Subtract another matrix from this one.
         
-        for (row, col), value in self.data.items():
-            result.data[(col, row)] = value
+        Args:
+            other: Another SparseMatrix to subtract
             
-        return result
+        Returns:
+            New SparseMatrix containing the difference
             
-    def add(self, other):
-        if self.rows != other.rows or self.cols != other.cols:
-            raise ValueError(f"Matrix dimensions do not match for addition: ({self.rows}x{self.cols}) and ({other.rows}x{other.cols}).")
-            
-        result = SparseMatrix(rows=self.rows, cols=self.cols)
-        
-        for key, val in self.data.items():
-            result.data[key] = val
-        for key, val in other.data.items():
-            if key in result.data:
-                result.data[key] += val
-                if result.data[key] == 0:
-                    del result.data[key]
-            else:
-                result.data[key] = val
-                
-        return result
-        
-    def subtract(self, other):
-        if self.rows != other.rows or self.cols != other.cols:
-            raise ValueError(f"Matrix dimensions do not match for subtraction: ({self.rows}x{self.cols}) and ({other.rows}x{other.cols}).")
-            
-        result = SparseMatrix(rows=self.rows, cols=self.cols)
-        
-        for key, val in self.data.items():
-            result.data[key] = val
-        
-        for key, val in other.data.items():
-            if key in result.data:
-                result.data[key] -= val
-                if result.data[key] == 0:
-                    del result.data[key]
-            else:
-                result.data[key] = -val
-                
-        return result
-        
-    def multiply(self, other):
-        if self.cols != other.rows:
-            raise ValueError(f"Cannot multiply: First matrix has {self.cols} columns, but second matrix has {other.rows} rows.")
-            
-        result = SparseMatrix(rows=self.rows, cols=other.cols)
-        
+        Raises:
+            ValueError: If matrices have different dimensions
+            TypeError: If other is not a SparseMatrix
+        """
+        return self.operate(other, lambda x, y: x - y)
+
+    def multiply(self, other: 'SparseMatrix') -> 'SparseMatrix':
+        """Multiply this matrix with another one."""
+
+        if not isinstance(other, SparseMatrix):
+            raise TypeError("Multiplication requires another SparseMatrix")
+
+        if self.numCols != other.numRows:
+            raise ValueError(
+                f"Matrix multiplication requires first matrix cols ({self.numCols}) "
+                f"to match second matrix rows ({other.numRows})"
+            )
+
+        result = SparseMatrix(rows=self.numRows, cols=other.numCols)
+        other_transposed = other.transpose()
+
         for (r1, c1), v1 in self.data.items():
-            for (r2, c2), v2 in other.data.items():
-                if c1 == r2:
-                    result_key = (r1, c2)
-                    current_val = result.data.get(result_key, 0)
-                    result.data[result_key] = current_val + (v1 * v2)
-                    if result.data[result_key] == 0:
-                        del result.data[result_key]
-                    
+            row_entries = other_transposed.get_row_entries(c1)
+            for c2 in row_entries:
+                v2 = other.get(c1, c2)
+                current_value = result.get(r1, c2)
+                result.set(r1, c2, current_value + v1 * v2)
+
         return result
-        
-    def display(self):
-        print(f"Matrix ({self.rows}x{self.cols}):")
-        for r in range(min(20, self.rows)):
-            row_values = []
-            for c in range(min(20, self.cols)):
-                row_values.append(str(self.get_element(r, c)))
-            print(' '.join(row_values))
-        if self.rows > 20 or self.cols > 20:
-            print("... (matrix too large to display fully)")
-            
-    def save_to_file(self, filename):
-        file = open(filename, 'w')
-        file.write(f"Matrix ({self.rows}x{self.cols}):\n")
-        for r in range(self.rows):
-            row_values = []
-            for c in range(self.cols):
-                row_values.append(str(self.get_element(r, c)))
-            file.write(' '.join(row_values) + '\n')
-        file.close()
-        print(f"Result saved to {filename}")
 
-if __name__ == "__main__":
-    base_path = "sample_inputs/"
-    
-    # Ensure the output directory exists
-    output_dir = "output_results/"
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
 
-    print("Enter files for addition and subtraction operations:")
-    file1_name = input("Enter the first matrix file name: ")
-    file2_name = input("Enter the second matrix file name: ")
-    
-    file1 = base_path + file1_name
-    file2 = base_path + file2_name
-    
-    while True:
-        print("\nChoose an operation: 1) Addition 2) Subtraction 3) Multiplication")
-        choice = input("Enter choice (1/2/3): ").strip()
-        if choice in ['1', '2', '3']:
-            break
-        print("Invalid choice. Please enter 1, 2, or 3.")
-    
-    try:
-        if choice == '1':
-            print(f"Loading {file1}...")
-            matrix1 = SparseMatrix(file1)
-            print(f"Loading {file2}...")
-            matrix2 = SparseMatrix(file2)
-            
-            print("Performing addition...")
-            result = matrix1.add(matrix2)
-            output_file = output_dir + "addition_result.txt"
-            
-        elif choice == '2':
-            print(f"Loading {file1}...")
-            matrix1 = SparseMatrix(file1)
-            print(f"Loading {file2}...")
-            matrix2 = SparseMatrix(file2)
-            
-            print("Performing subtraction...")
-            result = matrix1.subtract(matrix2)
-            output_file = output_dir + "subtraction_result.txt"
-            
-        elif choice == '3':
-            print("For multiplication, you need to select matrices with compatible dimensions.")
-            print("Enter files for multiplication operation:")
-            
-            mult_option = input("Choose multiplication option:\n"
-                               "1) First matrix * Third matrix\n"
-                               "2) Second matrix * Third matrix\n"
-                               "Enter choice (1/2): ").strip()
-            
-            file3_name = input("Enter the third matrix file name: ")
-            file3 = base_path + file3_name
-            
-            if mult_option == '1':
-                print(f"Loading {file1}...")
-                matrix_a = SparseMatrix(file1)
-                print(f"Loading {file3}...")
-                matrix_b = SparseMatrix(file3)
-            elif mult_option == '2':
-                print(f"Loading {file2}...")
-                matrix_a = SparseMatrix(file2)
-                print(f"Loading {file3}...")
-                matrix_b = SparseMatrix(file3)
-            
-            print("Performing multiplication...")
-            result = matrix_a.multiply(matrix_b)
-            output_file = output_dir + "multiplication_result.txt"
-            
-        print("\nResult (first 20x20 elements):")
-        result.display()
-        result.save_to_file(output_file)
+
+    def transpose(self) -> 'SparseMatrix':
+        """Create and return the transpose of this matrix.
         
-    except ValueError as e:
-        print(f"Error: {e}")
+        Returns:
+            New SparseMatrix that is the transpose of this one
+        """
+        transposed = SparseMatrix(rows=self.numCols, cols=self.numRows)
+        for (row, col), value in self.data.items():
+            transposed.set(col, row, value)
+        return transposed
+
+    def get_row_entries(self, row: int) -> Set[int]:
+        """Get all column indices with non-zero entries in a given row.
+        
+        Args:
+            row: Row index to examine
+            
+        Returns:
+            Set of column indices with non-zero entries
+            
+        Raises:
+            ValueError: If row is out of bounds
+        """
+        if row < 0 or row > self.numRows:
+            raise ValueError(f"Row index {row} is out of bounds")
+        return {col for (r, col) in self.data.keys() if r == row}
